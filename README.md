@@ -1,4 +1,4 @@
-Run
+<b>Run</b>
 
 docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server
 
@@ -13,6 +13,6 @@ go run ./shipping
 go run ./orchestrator
 
 
-Test
+<b>Test</b>
 
 echo '{"id":"001","item":"Pizza","amount":25}' | nats pub orders.create
