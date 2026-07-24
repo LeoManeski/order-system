@@ -15,27 +15,52 @@ func main(){
 	}
 	defer nc.Close()
 
-	nc.Subscribe("orders.pay", func(msg *nats.Msg){
+	_, err = nc.Subscribe("orders.pay", func(msg *nats.Msg){
 		var order model.Order
-		json.Unmarshal(msg.Data, &order)
+		if err:=json.Unmarshal(msg.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
 
 		fmt.Printf("Processing payment for order %s: %d\n", order.ID, order.Amount)
 		order.Status="paid"
 		fmt.Printf("order %s paid\n", order.ID)
 
-		data, _:=json.Marshal(order)
-		msg.Respond(data)
+		data, err:=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("fialed to marshal order:%v\n", err)
+			return
+		}
+		if err:=msg.Respond(data); err!=nil{
+			fmt.Printf("failed to respond:%v\n", err)
+		}
 	})
-	nc.Subscribe("orders.pay.compensate", func (msg *nats.Msg)  {
+	if err!=nil{
+		log.Fatal("failed to pay:", err)
+	}
+
+	_, err=nc.Subscribe("orders.pay.compensate", func (msg *nats.Msg)  {
 		var order model.Order
-		json.Unmarshal(msg.Data, &order)
+		if err:=json.Unmarshal(msg.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
 
 		fmt.Printf("refunding order: %s: %d\n", order.ID, order.Amount)
-		order.Status="refuded"
+		order.Status="refunded"
 
-		data, _:=json.Marshal(order)
-		msg.Respond(data)
+		data, err:=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("failed to respond:%v\n", err)
+		}
+		if err:=msg.Respond(data); err!=nil{
+			fmt.Printf("failed to respond:%v\n", err)
+		}
 	})
+	if err!=nil{
+		log.Fatal("failed to compensate:", err)
+	}
+
 	fmt.Println("payment service listening")
 	time.Sleep(1*time.Hour)
 }

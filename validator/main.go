@@ -14,9 +14,12 @@ func main(){
 	}
 	defer nc.Close()
 
-	nc.Subscribe("orders.validate", func(msg *nats.Msg){
+	_, err = nc.Subscribe("orders.validate", func(msg *nats.Msg){
 		var order model.Order
-		json.Unmarshal(msg.Data, &order)
+		if err:=json.Unmarshal(msg.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
 		fmt.Printf("Validating order %s: %s ($%d)\n", order.ID, order.Item, order.Amount)
 
 		if order.Item==""||order.Amount<=0{
@@ -26,9 +29,19 @@ func main(){
 			order.Status="validated"
 			fmt.Printf("Order %s VALID\n", order.ID)
 		}
-		data, _:=json.Marshal(order)
-		msg.Respond(data)
+		data, err:=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("failed to marshal order: %v\n", err)
+			return
+		}
+		if err:=msg.Respond(data); err!=nil{
+			fmt.Printf("failed to respond: %v\n", err)
+		}
 	})
+	if err!=nil{
+		log.Fatal("failed to subscribe:", err)
+	}
+	
 	fmt.Println("validator service listeninng")
 	time.Sleep(1*time.Hour)
 }

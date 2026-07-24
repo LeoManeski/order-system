@@ -30,23 +30,37 @@ func main(){
 	fmt.Println("connected to NATS")
 	fmt.Println("Orchestrator listening")
 
-	nc.Subscribe("orders.create", func(msg *nats.Msg){
+	_, err=nc.Subscribe("orders.create", func(msg *nats.Msg){
 		var order model.Order
-		json.Unmarshal(msg.Data, &order)
+		if err:=json.Unmarshal(msg.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
 		fmt.Printf("new order: %s - %s ($%d)\n", order.ID, order.Item, order.Amount)
 	
 		//validating
 		order.Status="validating"
-		rdb.HSet(ctx, "order:"+order.ID, "status",order.Status)
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 
-		data, _:=json.Marshal(order)
+		data, err:=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("failed to marshal order:%v\n", err)
+			return
+		}
 		resp, err:=nc.Request("orders.validate", data, 5*time.Second)
 		if err!=nil{
 			fmt.Printf("validation timout for %s\n", order.ID)
 			return
 		}
-		json.Unmarshal(resp.Data, &order)
-		rdb.HSet(ctx, "order:"+order.ID, "status:",order.Status)
+		if err:=json.Unmarshal(resp.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 		fmt.Printf("order %s: %s\n", order.ID, order.Status)
 		
 		//paying
@@ -56,16 +70,27 @@ func main(){
 		}
 		
 		order.Status="paying"
-		rdb.HSet(ctx, "order:"+order.ID, "status",order.Status)
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 
-		data, _=json.Marshal(order)
+		data, err=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("failed to marshal order:%v\n", err)
+			return
+		}
 		resp, err=nc.Request("orders.pay", data, 5*time.Second)
 		if err!=nil{
 			fmt.Printf("payment timout for %s\n", order.ID)
 			return
 		}
-		json.Unmarshal(resp.Data, &order)
-		rdb.HSet(ctx, "order:"+order.ID, "status:",order.Status)
+		if err:=json.Unmarshal(resp.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarshal order:%v\n", err)
+			return
+		}
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 		fmt.Printf("order %s: %s\n", order.ID, order.Status)
 
 		//shipping
@@ -74,16 +99,27 @@ func main(){
 			return
 		}		
 		order.Status="shipping"
-		rdb.HSet(ctx, "order:"+order.ID, "status", order.Status)
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 
-		data, _=json.Marshal(order)
+		data, err=json.Marshal(order)
+		if err!=nil{
+			fmt.Printf("failed to marshal order:%v\n", err)
+			return
+		}
 		resp, err=nc.Request("orders.ship", data, 5*time.Second)
 		if err!=nil{
 			fmt.Printf("Shipping timeout for %s\n", order.ID)
 			return
 		}
-		json.Unmarshal(resp.Data, &order)
-		rdb.HSet(ctx, "order:"+order.ID, "status",order.Status)
+		if err:=json.Unmarshal(resp.Data, &order); err!=nil{
+			fmt.Printf("failed to unmarhsal order:%v\n",err)
+			return
+		}
+		if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+			fmt.Printf("failed to update redis:%v\n",err)
+		}
 		fmt.Printf("order %s: %s\n", order.ID, order.Status)
 
 		if order.Status=="shipped"{
@@ -91,18 +127,29 @@ func main(){
 		}else{
 			fmt.Printf("order %s shipping failed, need compensation!\n", order.ID)
 
-			data, _ = json.Marshal(order)
+			data, err = json.Marshal(order)
+			if err!=nil{
+				fmt.Printf("failed to marshal order:%v\n", err)
+				return
+			}
 			resp,err=nc.Request("orders.pay.compensate", data, 5*time.Second)
 			if err!=nil{
 				fmt.Printf("Compensation timout for %s\n", order.ID)
 				return
 			}
-			json.Unmarshal(resp.Data, &order)
-			order.Status="COmpensated"
-			rdb.HSet(ctx, "order:"+order.ID, "status",order.Status)
+			if err:=json.Unmarshal(resp.Data, &order); err!=nil{
+				fmt.Printf("failed to unmarshal:%v\n", err)
+				return
+			}
+			order.Status="Compensated"
+			if err:=rdb.HSet(ctx, "order:"+order.ID, "status",order.Status).Err(); err!=nil{
+				fmt.Printf("failed to update redis:%v\n",err)
+			}
 			fmt.Printf("order %s is Compensated, money refunded\n", order.ID)
 		}
 	})
-
+	if err!=nil{
+		log.Fatal("failed to subscribe:",err)
+	}
 	select{}
 }
