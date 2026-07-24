@@ -3,7 +3,10 @@
 docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server
 
 docker run -d --name nats-js -p 4222:4222 -p 8222:8222 nats -js
+```
+(site servisi vo posebni terminali :/)
 
+```
 go run ./validator
 
 go run ./payment
